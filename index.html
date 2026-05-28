@@ -6,10 +6,11 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-<meta name="apple-mobile-web-app-title" content="Cycling"/>
-<meta name="application-name" content="Cycling"/>
+<meta name="apple-mobile-web-app-title" content="Velo Fitness"/>
+<meta name="application-name" content="Velo Fitness"/>
 <meta name="theme-color" content="#0a0a0f"/>
-<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%230a0a0f'/><circle cx='160' cy='310' r='80' fill='none' stroke='%23e8ff47' stroke-width='28'/><circle cx='352' cy='310' r='80' fill='none' stroke='%23e8ff47' stroke-width='28'/><circle cx='256' cy='160' r='30' fill='%23e8ff47'/><line x1='256' y1='190' x2='352' y2='310' stroke='%23e8ff47' stroke-width='20' stroke-linecap='round'/><line x1='256' y1='190' x2='180' y2='310' stroke='%23e8ff47' stroke-width='20' stroke-linecap='round'/><line x1='220' y1='250' x2='320' y2='250' stroke='%23e8ff47' stroke-width='20' stroke-linecap='round'/></svg>"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
 <title>Velo Fitness</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -979,11 +980,7 @@ renderAll();
 
 // Service worker (blob — works from local file)
 if('serviceWorker' in navigator) {
-  try {
-    const swCode = `self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));`;
-    const blob = new Blob([swCode],{type:'application/javascript'});
-    navigator.serviceWorker.register(URL.createObjectURL(blob));
-  } catch(e) {}
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 </script>
 </body>
