@@ -161,6 +161,26 @@ input,button,select{font-family:'Barlow Condensed',sans-serif;}
 .empty-state .es-title{font-size:18px;font-weight:700;margin-bottom:8px;color:var(--text);}
 .empty-state .es-sub{font-size:12px;font-family:'Space Mono',monospace;line-height:1.7;}
 .empty-state .es-btn{margin-top:20px;display:inline-block;padding:12px 24px;background:var(--accent);color:#0a0a0f;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;border:none;}
+
+/* ── FILTER BAR ── */
+.filter-bar{display:flex;flex-direction:column;gap:8px;margin-bottom:4px;padding:10px 0 2px;}
+.filter-row{display:flex;align-items:center;gap:8px;}
+.filter-label{font-size:9px;font-family:'Space Mono',monospace;color:var(--muted2);text-transform:uppercase;letter-spacing:1px;width:52px;flex-shrink:0;}
+.month-chips{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;flex:1;padding-bottom:2px;}
+.month-chips::-webkit-scrollbar{display:none;}
+.chip{flex-shrink:0;padding:5px 11px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.5px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--muted2);transition:all .15s;white-space:nowrap;}
+.chip.active{background:var(--accent);color:#0a0a0f;border-color:var(--accent);}
+.chip:hover:not(.active){border-color:var(--muted2);color:var(--text);}
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;}
+.toggle-label{font-size:12px;font-weight:600;color:var(--text);}
+.toggle-sub{font-size:10px;color:var(--muted2);font-family:'Space Mono',monospace;margin-top:1px;}
+.toggle{position:relative;width:40px;height:22px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;inset:0;background:var(--bg3);border:1px solid var(--border2);border-radius:20px;cursor:pointer;transition:.2s;}
+.toggle-slider::before{content:'';position:absolute;width:16px;height:16px;left:2px;top:2px;background:var(--muted2);border-radius:50%;transition:.2s;}
+.toggle input:checked + .toggle-slider{background:var(--accent);border-color:var(--accent);}
+.toggle input:checked + .toggle-slider::before{transform:translateX(18px);background:#0a0a0f;}
+.filter-count{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted2);text-align:right;padding:2px 0 6px;}
 @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 .section.active > *{animation:fadeUp .25s ease both;}
 .section.active > *:nth-child(2){animation-delay:.04s;}
@@ -839,24 +859,79 @@ function renderEndurance(stats) {
   });
 }
 
+// ── RIDE FILTER STATE ──
+const rideFilter = { month: 'all', completeOnly: false };
+
+function getMonthKey(date) {
+  // returns "2026-05" from "2026-05-01"
+  return date.slice(0, 7);
+}
+function monthLabel(key) {
+  const d = new Date(key + '-01T12:00:00');
+  return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+}
+function rideIsComplete(r) {
+  // Has all the key metrics
+  return r.avgPower > 0 && r.avgHR > 0 && r.normalizedPower > 0 && r.vi > 0;
+}
+
 function renderRides(stats) {
   const el = document.getElementById('rides-content');
   if (!stats || !stats.cycling.length) { el.innerHTML = emptyState(); return; }
-  const {cycling} = stats;
+  const { cycling } = stats;
 
-  const maxDist = Math.max(...cycling.map(r=>r.distance));
-  const minTime = cycling.filter(r=>r.distance>=100).reduce((a,r)=>r.movingTime<a?r.movingTime:a, Infinity);
+  // Build unique sorted month list
+  const months = [...new Set(cycling.map(r => getMonthKey(r.date)))].sort();
 
-  const items = [...cycling].reverse().map((r,i) => {
+  // Apply filters
+  let filtered = [...cycling];
+  if (rideFilter.month !== 'all') {
+    filtered = filtered.filter(r => getMonthKey(r.date) === rideFilter.month);
+  }
+  if (rideFilter.completeOnly) {
+    filtered = filtered.filter(r => rideIsComplete(r));
+  }
+
+  const maxDist = Math.max(...cycling.map(r => r.distance));
+  const minTime = cycling.filter(r => r.distance >= 100).reduce((a, r) => r.movingTime < a ? r.movingTime : a, Infinity);
+
+  // Month chips HTML
+  const allChip = `<button class="chip ${rideFilter.month==='all'?'active':''}" onclick="setMonthFilter('all')">All</button>`;
+  const monthChips = months.map(m =>
+    `<button class="chip ${rideFilter.month===m?'active':''}" onclick="setMonthFilter('${m}')">${monthLabel(m)}</button>`
+  ).join('');
+
+  // Ride cards
+  const items = [...filtered].reverse().map(r => {
     const isPRDist = r.distance === maxDist;
     const isPRTime = r.distance >= 100 && r.movingTime === minTime;
     const col = rideColor(r);
     const bgCol = rideTagColor(r);
     const typeName = rideTypeName(r);
-    const prBadges = [isPRDist?'<span class="pr-badge">PR dist</span>':'', isPRTime?'<span class="pr-badge">PR 100k</span>':''].join('');
-    const src = r.source==='strava_csv' ? '<span style="font-size:9px;color:var(--muted);margin-left:6px">STRAVA</span>' : '';
+    const prBadges = [
+      isPRDist ? '<span class="pr-badge">PR dist</span>' : '',
+      isPRTime ? '<span class="pr-badge">PR 100k</span>' : ''
+    ].join('');
+    const src = r.source === 'strava_csv' ? '<span style="font-size:9px;color:var(--muted);margin-left:6px">STRAVA</span>' : '';
 
-    return `<div class="ride-item" onclick="toggleDetail(this)" style="border-left-color:transparent">
+    // Missing data indicators
+    const missingPwr = !r.avgPower;
+    const missingHR  = !r.avgHR;
+    const missingNP  = !r.normalizedPower;
+    const missingVI  = !r.vi || r.vi <= 0;
+
+    const missingDots = [
+      missingPwr ? '<span title="No power data" style="font-size:9px;color:var(--red);font-family:Space Mono,monospace;">PWR</span>' : '',
+      missingHR  ? '<span title="No HR data"    style="font-size:9px;color:var(--red);font-family:Space Mono,monospace;">HR</span>'  : '',
+      missingNP  ? '<span title="No NP data"    style="font-size:9px;color:var(--red);font-family:Space Mono,monospace;">NP</span>'  : '',
+      missingVI  ? '<span title="No VI data"    style="font-size:9px;color:var(--red);font-family:Space Mono,monospace;">VI</span>'  : '',
+    ].filter(Boolean).join(' ');
+
+    const missingRow = missingDots
+      ? `<div style="display:flex;gap:5px;margin-top:5px;align-items:center;"><span style="font-size:9px;color:var(--muted2);font-family:Space Mono,monospace;">missing:</span>${missingDots}</div>`
+      : '';
+
+    return `<div class="ride-item" onclick="toggleDetail(this)">
       <div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${col};border-radius:3px 0 0 3px;"></div>
       <div class="ride-top">
         <div>
@@ -867,22 +942,57 @@ function renderRides(stats) {
       </div>
       <div class="ride-stats">
         <div class="ride-stat"><div class="rs-val">${Math.round(r.distance)}</div><div class="rs-lbl">km</div></div>
-        <div class="ride-stat"><div class="rs-val">${r.avgPower||'—'}</div><div class="rs-lbl">avg W</div></div>
-        <div class="ride-stat"><div class="rs-val">${r.avgHR||'—'}</div><div class="rs-lbl">avg HR</div></div>
-        <div class="ride-stat"><div class="rs-val">${Math.round(r.elevation)||'—'}</div><div class="rs-lbl">m ↑</div></div>
+        <div class="ride-stat"><div class="rs-val" style="${missingPwr?'color:var(--muted)':''}">${r.avgPower || '—'}</div><div class="rs-lbl">avg W</div></div>
+        <div class="ride-stat"><div class="rs-val" style="${missingHR?'color:var(--muted)':''}">${r.avgHR || '—'}</div><div class="rs-lbl">avg HR</div></div>
+        <div class="ride-stat"><div class="rs-val">${Math.round(r.elevation) || '—'}</div><div class="rs-lbl">m ↑</div></div>
       </div>
+      ${missingRow}
       <div class="ride-detail">
         <div class="rd-item"><div class="rd-val">${fmtTime(r.movingTime)}</div><div class="rd-lbl">moving time</div></div>
-        <div class="rd-item"><div class="rd-val">${r.normalizedPower||'—'}W</div><div class="rd-lbl">norm pwr</div></div>
-        <div class="rd-item"><div class="rd-val">${r.vi>0?r.vi.toFixed(2):'—'}</div><div class="rd-lbl">VI</div></div>
-        <div class="rd-item"><div class="rd-val">${r.maxHR||'—'}</div><div class="rd-lbl">max HR</div></div>
-        <div class="rd-item"><div class="rd-val">${r.avgCadence||'—'}</div><div class="rd-lbl">cadence</div></div>
-        <div class="rd-item"><div class="rd-val">${r.totalWork||'—'}</div><div class="rd-lbl">kJ</div></div>
+        <div class="rd-item"><div class="rd-val" style="${missingNP?'color:var(--muted)':''}">${r.normalizedPower ? r.normalizedPower+'W' : '—'}</div><div class="rd-lbl">norm pwr</div></div>
+        <div class="rd-item"><div class="rd-val" style="${missingVI?'color:var(--muted)':''}">${r.vi > 0 ? r.vi.toFixed(2) : '—'}</div><div class="rd-lbl">VI</div></div>
+        <div class="rd-item"><div class="rd-val" style="${missingHR?'color:var(--muted)':''}">${r.maxHR || '—'}</div><div class="rd-lbl">max HR</div></div>
+        <div class="rd-item"><div class="rd-val">${r.avgCadence || '—'}</div><div class="rd-lbl">cadence</div></div>
+        <div class="rd-item"><div class="rd-val">${r.totalWork || '—'}</div><div class="rd-lbl">kJ</div></div>
       </div>
     </div>`;
   }).join('');
 
-  el.innerHTML = `<div class="sec-label">${cycling.length} rides · ${stats.rangeLabel}</div>${items}`;
+  const noResults = filtered.length === 0
+    ? `<div class="empty-state" style="padding:40px 20px"><div class="es-icon">🔍</div><div class="es-title">No rides match</div><div class="es-sub">Try changing the filters above</div></div>`
+    : '';
+
+  el.innerHTML = `
+    <div class="filter-bar">
+      <div class="filter-row">
+        <div class="filter-label">Month</div>
+        <div class="month-chips">${allChip}${monthChips}</div>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Complete data only</div>
+          <div class="toggle-sub">Hide rides missing power, HR, NP or VI</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" ${rideFilter.completeOnly ? 'checked' : ''} onchange="setCompleteFilter(this.checked)"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="filter-count">${filtered.length} of ${cycling.length} rides</div>
+    ${items}${noResults}`;
+}
+
+function setMonthFilter(month) {
+  rideFilter.month = month;
+  renderRides(getStats(rides));
+  // scroll filter bar into view
+  document.querySelector('.content').scrollTop = 0;
+}
+
+function setCompleteFilter(val) {
+  rideFilter.completeOnly = val;
+  renderRides(getStats(rides));
 }
 
 function toggleDetail(el) {
